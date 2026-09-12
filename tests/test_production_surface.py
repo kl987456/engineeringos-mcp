@@ -151,6 +151,22 @@ def test_security_scanner_rejects_unbounded_output(monkeypatch, tmp_path):
         security_tools.scan_server(str(tmp_path))
 
 
+def test_mcp_scanner_command_shape_depends_on_recognized_binary_name(tmp_path):
+    assert security_tools._command_for("/usr/local/bin/mcp-scanner", tmp_path) == ["/usr/local/bin/mcp-scanner", "behavioral", str(tmp_path), "--format", "raw"]
+    assert security_tools._command_for("mcp-scanner.exe", tmp_path) == ["mcp-scanner.exe", "behavioral", str(tmp_path), "--format", "raw"]
+    assert security_tools._command_for("/usr/local/bin/agent-scan", tmp_path) == ["/usr/local/bin/agent-scan", str(tmp_path), "--json"]
+    assert security_tools._command_for("operator-scanner", tmp_path) == ["operator-scanner", str(tmp_path), "--json"]
+
+
+def test_mcp_scanner_findings_extraction_covers_known_output_shapes():
+    assert security_tools._findings_from({"findings": [{"a": 1}]}, 1) == [{"a": 1}]
+    assert security_tools._findings_from({"issues": [{"b": 2}]}, 1) == [{"b": 2}]
+    analyzer = security_tools._findings_from({"analyzer_results": {"api_analyzer": {"severity": "HIGH", "total_findings": 2}}}, 1)
+    assert analyzer == [{"analyzer": "api_analyzer", "severity": "HIGH", "total_findings": 2}]
+    assert security_tools._findings_from({"unrecognized": True}, 0) == [{"status": "clean", "result": {"unrecognized": True}}]
+    assert security_tools._findings_from({"unrecognized": True}, 1) == [{"status": "findings", "result": {"unrecognized": True}}]
+
+
 def test_tenant_root_rejects_outside_paths(tmp_path, monkeypatch):
     tenant = tmp_path / "tenant"
     tenant.mkdir()
@@ -191,6 +207,102 @@ def test_change_impact_labels_semantic_fallback(tmp_path, monkeypatch):
     subprocess.run(["git", "-c", "user.email=test@example.com", "-c", "user.name=test", "commit", "-qm", "change"], cwd=tmp_path, check=True)
     evidence = change_impact(str(tmp_path), "HEAD", "checkout")
     assert any("Semantic impact is unavailable" in item.summary for item in evidence)
+
+
+def test_code_security_scan_reports_absent_scanners_without_hard_failure(tmp_path, monkeypatch):
+    import engineeringos.tools.code_security_tools as code_security_tools
+    monkeypatch.delenv("ENGINEERINGOS_SEMGREP_BIN", raising=False)
+    monkeypatch.delenv("ENGINEERINGOS_SEMGREP_CONFIG", raising=False)
+    monkeypatch.delenv("ENGINEERINGOS_GITLEAKS_BIN", raising=False)
+    monkeypatch.setattr(code_security_tools.shutil, "which", lambda name: None)
+    with pytest.raises(Exception, match="neither Semgrep nor Gitleaks"):
+        code_security_tools.code_security_scan(str(tmp_path))
+
+
+def test_code_security_scan_uses_configured_semgrep_and_gitleaks(tmp_path, monkeypatch):
+    import json
+    import engineeringos.tools.code_security_tools as code_security_tools
+    (tmp_path / "app.py").write_text("x = 1\n", encoding="utf-8")
+    monkeypatch.setenv("ENGINEERINGOS_SEMGREP_BIN", "semgrep-bin")
+    monkeypatch.setenv("ENGINEERINGOS_SEMGREP_CONFIG", "p/security-audit")
+    monkeypatch.setenv("ENGINEERINGOS_GITLEAKS_BIN", "gitleaks-bin")
+
+    class Result:
+        returncode = 0
+        stderr = ""
+
+    def fake_run(command, **kwargs):
+        result = Result()
+        if command[0] == "semgrep-bin":
+            result.stdout = json.dumps({"results": [{"check_id": "py.rule", "path": "app.py", "start": {"line": 1}, "extra": {"message": "issue found", "severity": "WARNING"}}]})
+        else:
+            result.stdout = json.dumps([{"RuleID": "generic-secret", "File": "app.py", "StartLine": 1, "Description": "a leaked secret"}])
+        return result
+
+    monkeypatch.setattr(code_security_tools.subprocess, "run", fake_run)
+    evidence = code_security_tools.code_security_scan(str(tmp_path))
+    assert {item.source for item in evidence} == {"semgrep", "gitleaks"}
+    assert any("py.rule" in item.summary and "issue found" in item.summary for item in evidence)
+    assert any("generic-secret" in item.summary and "a leaked secret" in item.summary for item in evidence)
+
+
+def test_vulnerability_scan_reports_absent_scanner(tmp_path, monkeypatch):
+    import engineeringos.tools.vulnerability_tools as vulnerability_tools
+    monkeypatch.delenv("ENGINEERINGOS_OSV_SCANNER_BIN", raising=False)
+    monkeypatch.setattr(vulnerability_tools.shutil, "which", lambda name: None)
+    with pytest.raises(Exception, match="osv-scanner is not installed"):
+        vulnerability_tools.vulnerability_scan(str(tmp_path))
+
+
+def test_vulnerability_scan_summarizes_findings_and_labels_network_source(tmp_path, monkeypatch):
+    import json
+    import engineeringos.tools.vulnerability_tools as vulnerability_tools
+    monkeypatch.setenv("ENGINEERINGOS_OSV_SCANNER_BIN", "osv-scanner-bin")
+    monkeypatch.delenv("ENGINEERINGOS_OSV_SCANNER_OFFLINE", raising=False)
+    payload = {
+        "results": [{
+            "source": {"path": "package-lock.json"},
+            "packages": [{
+                "package": {"name": "lodash", "version": "4.17.15", "ecosystem": "npm"},
+                "groups": [{"aliases": ["CVE-2020-8203", "GHSA-p6mc-m468-83gw"], "max_severity": "7.4"}],
+            }],
+        }],
+    }
+
+    class Result:
+        returncode = 1
+        stdout = json.dumps(payload)
+        stderr = ""
+
+    monkeypatch.setattr(vulnerability_tools.subprocess, "run", lambda *a, **k: Result())
+    evidence = vulnerability_tools.vulnerability_scan(str(tmp_path))
+    assert len(evidence) == 1
+    assert "lodash@4.17.15" in evidence[0].summary
+    assert "CVE-2020-8203" in evidence[0].summary
+    assert "live network query" in evidence[0].source
+
+
+def test_vulnerability_scan_offline_mode_adds_flags_and_label(tmp_path, monkeypatch):
+    import json
+    import engineeringos.tools.vulnerability_tools as vulnerability_tools
+    monkeypatch.setenv("ENGINEERINGOS_OSV_SCANNER_BIN", "osv-scanner-bin")
+    monkeypatch.setenv("ENGINEERINGOS_OSV_SCANNER_OFFLINE", "1")
+    captured = {}
+
+    class Result:
+        returncode = 0
+        stdout = json.dumps({"results": []})
+        stderr = ""
+
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        return Result()
+
+    monkeypatch.setattr(vulnerability_tools.subprocess, "run", fake_run)
+    evidence = vulnerability_tools.vulnerability_scan(str(tmp_path))
+    assert "--offline" in captured["command"]
+    assert "--offline-vulnerabilities" in captured["command"]
+    assert "offline local database" in evidence[0].source
 
 
 def test_golden_investigation_preserves_evidence_only_contract():

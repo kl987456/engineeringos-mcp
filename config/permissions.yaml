@@ -33,6 +33,8 @@ tools:
   analyze_change: READ
   production_readiness: READ
   security_scan: READ
+  code_security_scan: READ
+  vulnerability_scan: READ
   repo_overview: READ
   language_profile: READ
   dependency_health: READ

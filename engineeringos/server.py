@@ -24,6 +24,7 @@ from .permissions import annotations_for
 from .evidence import ToolHardFailure
 from .tools import git_tools, search_tools, test_tools, log_tools
 from .tools import impact_tools, security_tools, dependency_tools, diagnostic_tools, inventory_tools, lsp_tools, language_tools
+from .tools import code_security_tools, vulnerability_tools
 from . import indexer
 from . import code_maps
 from . import __version__
@@ -37,16 +38,29 @@ app = MCPServer("EngineeringOS", version=__version__)
 
 @app.resource("engineeringos://capabilities", name="capabilities", title="EngineeringOS capabilities", mime_type="application/json")
 def capabilities() -> str:
-    scanner = bool(os.environ.get("ENGINEERINGOS_MCP_SCANNER") or shutil.which("mcp-scan") or shutil.which("agent-scan"))
+    scanner = bool(os.environ.get("ENGINEERINGOS_MCP_SCANNER") or shutil.which("mcp-scanner") or shutil.which("mcp-scan") or shutil.which("agent-scan"))
     semantic = bool(os.environ.get("ENGINEERINGOS_SEM_BIN") or shutil.which("sem"))
     worker = bool(os.environ.get("ENGINEERINGOS_TEST_WORKER"))
     lsp_adapter = bool(os.environ.get("ENGINEERINGOS_LSP_ADAPTER"))
+    semgrep = bool(os.environ.get("ENGINEERINGOS_SEMGREP_BIN") or shutil.which("semgrep"))
+    semgrep_configured = semgrep and bool(os.environ.get("ENGINEERINGOS_SEMGREP_CONFIG"))
+    gitleaks = bool(os.environ.get("ENGINEERINGOS_GITLEAKS_BIN") or shutil.which("gitleaks"))
+    osv_scanner = bool(os.environ.get("ENGINEERINGOS_OSV_SCANNER_BIN") or shutil.which("osv-scanner"))
     parsers = {language: indexer.parser_backend(language) for language in sorted(set(indexer.LANGUAGES.values()))}
     return json.dumps({
         "server": "EngineeringOS",
         "principles": ["read before write", "evidence before conclusions", "human approval for risky actions"],
-        "features": ["investigate", "repo_overview", "language_profile", "test_plan", "polyglot_tests", "software_inventory", "package_urls", "cyclonedx_1_6_sbom", "index_code", "find_symbol", "dependency_graph", "export_code_map", "ingest_code_map", "map_find_symbol", "map_dependency_graph", "map_status", "lsp_symbols", "production_readiness", "diagnostics", "security_scan", "sandbox_worker_protocol", "local_dashboard"],
-        "integrations": {"semantic_impact": semantic, "security_scanner": scanner, "sandbox_worker": worker, "structural_symbol_adapter": lsp_adapter, "parser_backends": parsers},
+        "features": ["investigate", "repo_overview", "language_profile", "test_plan", "polyglot_tests", "software_inventory", "package_urls", "cyclonedx_1_6_sbom", "index_code", "find_symbol", "dependency_graph", "export_code_map", "ingest_code_map", "map_find_symbol", "map_dependency_graph", "map_status", "lsp_symbols", "production_readiness", "diagnostics", "security_scan", "code_security_scan", "vulnerability_scan", "sandbox_worker_protocol", "local_dashboard"],
+        "integrations": {
+            "semantic_impact": semantic,
+            "security_scanner": scanner,
+            "sandbox_worker": worker,
+            "structural_symbol_adapter": lsp_adapter,
+            "sast_semgrep": semgrep_configured,
+            "secret_scan_gitleaks": gitleaks,
+            "vulnerability_scan_osv": osv_scanner,
+            "parser_backends": parsers,
+        },
         "claim_policy": "Deterministic tools return evidence; calling models form claims.",
     }, sort_keys=True)
 
@@ -309,6 +323,24 @@ def security_scan(server_path: str) -> dict:
         return _as_result(security_tools.scan_server(server_path), "security_scan")
     except ToolHardFailure as e:
         audit_record("security_scan", status="error", detail=str(e))
+        return {"isError": True, "error": str(e)}
+
+
+@app.tool(name="code_security_scan", description="Run operator-installed Semgrep (SAST) and Gitleaks (secret detection) against the target repository from a disposable copy; each is independently optional and reports an honest fallback when not configured.", annotations=annotations_for("code_security_scan"))
+def code_security_scan(repo_path: str, timeout: int = 120) -> dict:
+    try:
+        return _as_result(code_security_tools.code_security_scan(repo_path, timeout), "code_security_scan")
+    except ToolHardFailure as e:
+        audit_record("code_security_scan", status="error", detail=str(e))
+        return {"isError": True, "error": str(e)}
+
+
+@app.tool(name="vulnerability_scan", description="Run the operator-installed OSV-Scanner against detected dependency manifests for known-vulnerability matches. By default this queries the public osv.dev database over the network; set ENGINEERINGOS_OSV_SCANNER_OFFLINE=1 to use a pre-downloaded local database instead.", annotations=annotations_for("vulnerability_scan"))
+def vulnerability_scan(repo_path: str, timeout: int = 120) -> dict:
+    try:
+        return _as_result(vulnerability_tools.vulnerability_scan(repo_path, timeout), "vulnerability_scan")
+    except ToolHardFailure as e:
+        audit_record("vulnerability_scan", status="error", detail=str(e))
         return {"isError": True, "error": str(e)}
 
 

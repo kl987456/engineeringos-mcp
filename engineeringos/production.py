@@ -30,6 +30,8 @@ from .server import (
     search_logs,
     production_readiness,
     security_scan,
+    code_security_scan,
+    vulnerability_scan,
     repo_overview,
     language_profile,
     dependency_health,
@@ -127,6 +129,8 @@ def _register(server: MCPServer) -> None:
     )(analyze_change)
     server.tool(name="production_readiness", description="Gather deterministic evidence for production readiness; makes no release decision.", annotations=annotations_for("production_readiness"))(production_readiness)
     server.tool(name="security_scan", description="Run the operator-configured MCP security scanner and return findings as evidence.", annotations=annotations_for("security_scan"))(security_scan)
+    server.tool(name="code_security_scan", description="Run operator-installed Semgrep (SAST) and Gitleaks (secret detection) against the target repository from a disposable copy; each is independently optional and reports an honest fallback when not configured.", annotations=annotations_for("code_security_scan"))(code_security_scan)
+    server.tool(name="vulnerability_scan", description="Run the operator-installed OSV-Scanner against detected dependency manifests for known-vulnerability matches. By default this queries the public osv.dev database over the network; set ENGINEERINGOS_OSV_SCANNER_OFFLINE=1 to use a pre-downloaded local database instead.", annotations=annotations_for("vulnerability_scan"))(vulnerability_scan)
     server.tool(name="repo_overview", description="Gather a fast evidence-only inventory of repository shape, languages, tests, index freshness, and deployment artifacts.", annotations=annotations_for("repo_overview"))(repo_overview)
     server.tool(name="language_profile", description="Inventory languages, test files, parser backends, source size, and build ecosystems in a polyglot repository.", annotations=annotations_for("language_profile"))(language_profile)
     server.tool(name="dependency_health", description="Inventory supported dependency manifests and lockfiles; does not make vulnerability claims.", annotations=annotations_for("dependency_health"))(dependency_health)

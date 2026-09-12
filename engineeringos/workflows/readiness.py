@@ -22,11 +22,22 @@ def production_readiness(repo_path: str) -> dict:
         chain.evidence.append(EvidenceItem("code_search", "sandbox", "External sandbox worker is configured", "ENGINEERINGOS_TEST_WORKER"))
     else:
         chain.incomplete.append("sandbox worker is not configured; do not expose test execution to untrusted repositories")
-    scanner = os.environ.get("ENGINEERINGOS_MCP_SCANNER") or shutil.which("mcp-scan") or shutil.which("agent-scan")
+    scanner = os.environ.get("ENGINEERINGOS_MCP_SCANNER") or shutil.which("mcp-scanner") or shutil.which("mcp-scan") or shutil.which("agent-scan")
     if scanner:
         chain.evidence.append(EvidenceItem("code_search", "security", "MCP security scanner is configured", str(scanner)))
     else:
-        chain.incomplete.append("MCP security scanner is not configured; run agent-scan/mcp-scan before release")
+        chain.incomplete.append("MCP security scanner is not configured; run mcp-scanner/agent-scan/mcp-scan before release")
+    semgrep = os.environ.get("ENGINEERINGOS_SEMGREP_BIN") or shutil.which("semgrep")
+    gitleaks = os.environ.get("ENGINEERINGOS_GITLEAKS_BIN") or shutil.which("gitleaks")
+    if semgrep or gitleaks:
+        chain.evidence.append(EvidenceItem("code_search", "security", f"Code security scanning is available (semgrep={bool(semgrep)}, gitleaks={bool(gitleaks)})", "code_security_scan"))
+    else:
+        chain.incomplete.append("neither Semgrep nor Gitleaks is configured; consider running code_security_scan before release")
+    osv_scanner = os.environ.get("ENGINEERINGOS_OSV_SCANNER_BIN") or shutil.which("osv-scanner")
+    if osv_scanner:
+        chain.evidence.append(EvidenceItem("code_search", "security", "Dependency vulnerability scanning is configured", str(osv_scanner)))
+    else:
+        chain.incomplete.append("osv-scanner is not configured; consider running vulnerability_scan before release")
     if chain.incomplete:
         chain.note = "Readiness evidence is incomplete; inspect the incomplete field before release. This tool makes no release decision."
     return chain.to_dict()

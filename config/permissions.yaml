@@ -1,0 +1,51 @@
+# Permission tier table (spec §3). One tier per tool, decided here at
+# registration time — not something a tool call, a tool description, or
+# any text returned by a tool can change at runtime. This file is the
+# single source of truth; engineeringos/permissions.py just enforces it.
+
+tiers:
+  READ:
+    requires_human_approval: false
+    sandboxed: false
+  SAFE_WRITE:
+    requires_human_approval: false
+    sandboxed: true
+  RESTRICTED_WRITE:
+    requires_human_approval: true
+    sandboxed: true
+  HIGH_RISK:
+    requires_human_approval: true
+    sandboxed: true
+    rate_limit_per_session: 3
+
+tools:
+  recent_changes: READ
+  git_diff: READ
+  search_code: READ
+  run_tests: READ
+  test_plan: READ
+  software_inventory: READ
+  cyclonedx_sbom: READ
+  search_logs: READ
+  investigate: READ          # workflow tool — only orchestrates READ-tier tools
+  index_code: READ
+  find_symbol: READ
+  analyze_change: READ
+  production_readiness: READ
+  security_scan: READ
+  repo_overview: READ
+  language_profile: READ
+  dependency_health: READ
+  diagnostics: READ
+  dependency_graph: READ
+  lsp_symbols: READ
+  export_code_map: READ
+  ingest_code_map: SAFE_WRITE
+  map_find_symbol: READ
+  map_dependency_graph: READ
+  map_status: READ
+  # Example future entries, left here so the pattern is obvious when V1/V2
+  # tools get added — nothing below this line is implemented yet:
+  # apply_patch: RESTRICTED_WRITE
+  # database_execute: HIGH_RISK
+  # deploy: HIGH_RISK

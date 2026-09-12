@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "engineeringos-mcp"
+version = "0.4.0"
+requires-python = ">=3.12"
+dependencies = ["mcp>=2.2.0", "PyYAML>=6.0", "PyJWT[crypto]>=2.10", "pytest>=8.0", "uvicorn>=0.30"]
+
+[project.scripts]
+engineeringos-mcp = "engineeringos.cli:main"
+engineeringos-dashboard = "dashboard.server:main"
+engineeringos-eval = "engineeringos.evaluations:main"
+engineeringos-preflight = "engineeringos.preflight:main"
+engineeringos-map = "engineeringos.map_cli:main"
+
+[project.optional-dependencies]
+parsing = [
+  "tree-sitter>=0.25.2,<0.27",
+  "tree-sitter-javascript>=0.23",
+  "tree-sitter-typescript>=0.23",
+  "tree-sitter-go>=0.23",
+  "tree-sitter-rust>=0.23",
+  "tree-sitter-java>=0.23",
+  "tree-sitter-c>=0.24",
+  "tree-sitter-cpp>=0.23",
+  "tree-sitter-c-sharp>=0.23",
+  "tree-sitter-swift>=0.7",
+  "tree-sitter-scala>=0.26",
+  "tree-sitter-ruby>=0.23",
+  "tree-sitter-php>=0.24",
+]
+
+[tool.setuptools.packages.find]
+include = ["engineeringos*", "dashboard*"]
+
+[tool.setuptools.package-data]
+engineeringos = ["config/*.yaml"]
+dashboard = ["*.html", "*.css", "*.js", "*.jsonl", "README.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

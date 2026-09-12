@@ -1,0 +1,16 @@
+**
+!pyproject.toml
+!README.md
+!NOTICE.md
+!SECURITY.md
+!config/
+!config/**
+!engineeringos/
+!engineeringos/**
+!dashboard/
+!dashboard/**
+**/__pycache__/
+**/*.pyc
+**/.env*
+**/.engineeringos/
+**/sample-audit.jsonl

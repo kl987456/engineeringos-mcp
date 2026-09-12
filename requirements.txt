@@ -1,0 +1,5 @@
+mcp
+pyyaml
+pytest
+PyJWT[crypto]
+uvicorn>=0.30

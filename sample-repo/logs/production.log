@@ -1,0 +1,5 @@
+2026-09-10T14:02:11Z INFO  checkout.api - POST /checkout customer_id=cust_882 status=200
+2026-09-10T14:03:45Z INFO  checkout.api - POST /checkout customer_id=cust_991 status=200
+2026-09-10T14:05:02Z ERROR checkout.api - POST /checkout customer_id=cust_legacy_9 status=500 trace="AttributeError: 'NoneType' object has no attribute 'id'" file=checkout/payments.py line=13
+2026-09-10T14:06:18Z ERROR checkout.api - POST /checkout customer_id=cust_legacy_42 status=500 trace="AttributeError: 'NoneType' object has no attribute 'id'" file=checkout/payments.py line=13
+2026-09-10T14:07:30Z INFO  checkout.api - POST /checkout customer_id=cust_120 status=200

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "engineeringos": {
+      "command": "python",
+      "args": ["-m", "engineeringos.server"]
+    }
+  }
+}

@@ -1,0 +1,4 @@
+{"timestamp":1789147200,"event_id":"demo-1","tool":"investigate","status":"success","tenant":"acme-platform"}
+{"timestamp":1789147260,"event_id":"demo-2","tool":"run_tests","status":"success","tenant":"acme-platform"}
+{"timestamp":1789147320,"event_id":"demo-3","tool":"index_code","status":"success","tenant":"northstar"}
+{"timestamp":1789147380,"event_id":"demo-4","tool":"security_scan","status":"error","tenant":"northstar","detail":"Scanner unavailable in local demo"}

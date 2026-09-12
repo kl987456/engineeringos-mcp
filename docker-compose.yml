@@ -1,0 +1,32 @@
+services:
+  engineeringos:
+    build: .
+    ports: ["8000:8000"]
+    environment:
+      ENGINEERINGOS_OIDC_ISSUER: ${ENGINEERINGOS_OIDC_ISSUER:?set OIDC issuer}
+      ENGINEERINGOS_OIDC_AUDIENCE: ${ENGINEERINGOS_OIDC_AUDIENCE:?set OIDC audience}
+      ENGINEERINGOS_OIDC_SCOPES: ${ENGINEERINGOS_OIDC_SCOPES:-engineering:read}
+      ENGINEERINGOS_OIDC_JWKS_URI: ${ENGINEERINGOS_OIDC_JWKS_URI:-}
+      ENGINEERINGOS_TENANT_ROOT: /tenant-repos
+      ENGINEERINGOS_ALLOWED_HOSTS: ${ENGINEERINGOS_ALLOWED_HOSTS:?set allowed public host}
+      ENGINEERINGOS_ALLOWED_ORIGINS: ${ENGINEERINGOS_ALLOWED_ORIGINS:-}
+      ENGINEERINGOS_AUDIT_LOG: /var/log/engineeringos/audit.jsonl
+      ENGINEERINGOS_RATE_LIMIT_PER_MINUTE: ${ENGINEERINGOS_RATE_LIMIT_PER_MINUTE:-120}
+      ENGINEERINGOS_RATE_LIMIT_KEYS: ${ENGINEERINGOS_RATE_LIMIT_KEYS:-10000}
+      # Optional operator-configured command for a separate sandbox worker.
+      ENGINEERINGOS_TEST_WORKER: ${ENGINEERINGOS_TEST_WORKER:-}
+      ENGINEERINGOS_REQUIRE_SANDBOX_WORKER: ${ENGINEERINGOS_REQUIRE_SANDBOX_WORKER:-1}
+      ENGINEERINGOS_ENABLE_HSTS: ${ENGINEERINGOS_ENABLE_HSTS:-0}
+      ENGINEERINGOS_MAX_INDEX_FILES: ${ENGINEERINGOS_MAX_INDEX_FILES:-100000}
+      ENGINEERINGOS_INDEX_ROOT: /var/lib/engineeringos/indexes
+    volumes:
+      - ${ENGINEERINGOS_TENANT_REPOS:?set tenant repo directory}:/tenant-repos:ro
+      - audit-log:/var/log/engineeringos
+      - index-data:/var/lib/engineeringos/indexes
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+volumes:
+  audit-log:
+  index-data:

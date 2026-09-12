@@ -31,6 +31,12 @@ parsing = [
   "tree-sitter-ruby>=0.23",
   "tree-sitter-php>=0.24",
 ]
+parsing-pack = [
+  "tree-sitter-language-pack>=1.18,<2",
+]
+test = [
+  "httpx>=0.27",
+]
 
 [tool.setuptools.packages.find]
 include = ["engineeringos*", "dashboard*"]

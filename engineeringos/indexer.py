@@ -70,6 +70,40 @@ TREE_SITTER_GRAMMARS = {
     "php": ("tree_sitter_php", {"class_declaration": "class", "interface_declaration": "interface", "trait_declaration": "trait", "function_definition": "function", "method_declaration": "method"}),
 }
 
+# Second-tier grammar resolution for languages with no hand-tuned pinned
+# package above. Backed by the optional `tree-sitter-language-pack` extra,
+# which resolves ~370 grammars behind one API but downloads a grammar binary
+# on first use if it isn't already cached locally. To keep this MCP's
+# no-silent-network-calls posture, we only ever consult a language that is
+# ALREADY in its local cache (see `_LANGUAGE_PACK_CACHED` below) — we never
+# trigger a fresh download from inside a tool call. Operators opt in by
+# prefetching once, e.g.:
+#   python -c "import tree_sitter_language_pack as t; t.prefetch(['kotlin','lua','bash','dart'])"
+# Elixir is deliberately not mapped: its grammar has no distinct def/call
+# node types (a bare function call and a `def` both parse as a generic
+# `call` node), so a naive mapping here would misreport call-sites as
+# definitions — needs dedicated callee-filtering logic, not this table.
+LANGUAGE_PACK_NODE_KINDS = {
+    "kotlin": {"class_declaration": "class", "object_declaration": "object", "function_declaration": "function"},
+    "lua": {"function_declaration": "function"},
+    "shell": {"function_definition": "function"},
+    "dart": {"class_definition": "class", "mixin_declaration": "mixin", "enum_declaration": "enum", "extension_declaration": "extension", "function_signature": "function"},
+}
+_LANGUAGE_PACK_NAMES = {"shell": "bash"}
+_CLASS_KEYWORD_REFINEMENTS = {"swift": {"class", "struct", "actor", "enum"}, "kotlin": {"class", "interface"}}
+
+
+def _language_pack_cached(name: str) -> bool:
+    try:
+        import tree_sitter_language_pack
+    except ImportError:
+        return False
+    try:
+        return name in tree_sitter_language_pack.downloaded_languages()
+    except (tree_sitter_language_pack.Error, OSError):
+        return False
+
+
 MAX_SOURCE_BYTES = 2 * 1024 * 1024
 DEFAULT_MAX_INDEX_FILES = 100_000
 
@@ -106,29 +140,46 @@ def _db(repo: Path) -> sqlite3.Connection:
 @lru_cache(maxsize=None)
 def _tree_sitter_language(language: str):
     grammar = TREE_SITTER_GRAMMARS.get(language)
-    if not grammar:
-        return None
-    module_name, _ = grammar
-    try:
-        module = importlib.import_module(module_name)
-        from tree_sitter import Language
-        factory = getattr(module, "language", None)
-        if factory is None and language == "typescript":
-            factory = getattr(module, "language_typescript", None)
-        if factory is None:
+    if grammar is not None:
+        module_name, _ = grammar
+        try:
+            module = importlib.import_module(module_name)
+            from tree_sitter import Language
+            factory = getattr(module, "language", None)
+            if factory is None and language == "typescript":
+                factory = getattr(module, "language_typescript", None)
+            if factory is None:
+                return None
+            value = factory()
+            return value if isinstance(value, Language) else Language(value)
+        except (ImportError, AttributeError, TypeError, ValueError, OSError):
             return None
-        value = factory()
-        return value if isinstance(value, Language) else Language(value)
-    except (ImportError, AttributeError, TypeError, ValueError, OSError):
+    # No hand-tuned pinned package for this language — try the broader,
+    # opt-in language-pack backend, but only if the grammar is already
+    # cached locally (never fetch over the network from inside a tool call).
+    if language not in LANGUAGE_PACK_NODE_KINDS:
+        return None
+    mapped_name = _LANGUAGE_PACK_NAMES.get(language, language)
+    if not _language_pack_cached(mapped_name):
+        return None
+    try:
+        import tree_sitter_language_pack
+    except ImportError:
+        return None
+    try:
+        return tree_sitter_language_pack.get_language(mapped_name)
+    except (tree_sitter_language_pack.Error, AttributeError, TypeError, ValueError, OSError):
         return None
 
 
 def _tree_sitter_symbols(raw: bytes, language: str) -> list[tuple[str, str, int, int]] | None:
     grammar = TREE_SITTER_GRAMMARS.get(language)
-    language_obj = _tree_sitter_language(language)
-    if not grammar or language_obj is None:
+    node_kinds = grammar[1] if grammar is not None else LANGUAGE_PACK_NODE_KINDS.get(language)
+    if node_kinds is None:
         return None
-    _, node_kinds = grammar
+    language_obj = _tree_sitter_language(language)
+    if language_obj is None:
+        return None
     try:
         from tree_sitter import Parser
         try:
@@ -145,9 +196,10 @@ def _tree_sitter_symbols(raw: bytes, language: str) -> list[tuple[str, str, int,
         node = stack.pop()
         kind = node_kinds.get(node.type)
         if kind:
-            if language == "swift" and node.type == "class_declaration":
+            keywords = _CLASS_KEYWORD_REFINEMENTS.get(language)
+            if keywords and node.type == "class_declaration":
                 declaration = raw[node.start_byte:node.end_byte].lstrip().split(None, 1)[0].decode("utf-8", errors="replace")
-                if declaration in {"class", "struct", "actor", "enum"}:
+                if declaration in keywords:
                     kind = declaration
             name_node = node.child_by_field_name("name")
             if name_node is None:
@@ -170,9 +222,9 @@ def _tree_sitter_symbols(raw: bytes, language: str) -> list[tuple[str, str, int,
 def parser_backend(language: str) -> str:
     if language == "python":
         return "python-ast"
-    if _tree_sitter_language(language) is not None:
-        return "tree-sitter"
-    return "regex-fallback"
+    if _tree_sitter_language(language) is None:
+        return "regex-fallback"
+    return "tree-sitter" if language in TREE_SITTER_GRAMMARS else "tree-sitter (language-pack)"
 
 
 def _symbols(raw: bytes, rel: str, language: str) -> list[tuple[str, str, int, int]]:

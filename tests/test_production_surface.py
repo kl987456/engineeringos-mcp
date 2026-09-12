@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
+import pytest
 from mcp import Client
 import jwt
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -601,6 +602,37 @@ def test_available_native_grammar_produces_structural_symbols():
     assert native is not None
     assert ("Worker", "class", 1, 1) in native
     assert ("Execute", "method", 1, 1) in native
+
+
+def test_language_pack_never_fetches_a_grammar_that_is_not_already_cached(monkeypatch):
+    import engineeringos.indexer as indexer_module
+    indexer_module._tree_sitter_language.cache_clear()
+    monkeypatch.setattr(indexer_module, "_language_pack_cached", lambda name: False)
+    assert indexer_module._tree_sitter_language("kotlin") is None
+    assert indexer_module.parser_backend("kotlin") == "regex-fallback"
+    indexer_module._tree_sitter_language.cache_clear()
+
+
+@pytest.mark.parametrize(
+    "language,source,expected",
+    [
+        ("kotlin", b"class Worker {\n    fun execute(): Boolean { return true }\n}\ninterface Handler {\n    fun handle()\n}\nobject Singleton {\n    fun run() {}\n}\n",
+         {("Worker", "class", 1, 3), ("execute", "function", 2, 2), ("Handler", "interface", 4, 6), ("handle", "function", 5, 5), ("Singleton", "object", 7, 9), ("run", "function", 8, 8)}),
+        ("lua", b"function greet(name)\n  print(name)\nend\n\nlocal function helper()\nend\n",
+         {("greet", "function", 1, 3), ("helper", "function", 5, 6)}),
+        ("shell", b"function greet() {\n  echo hi\n}\nbuild_all() {\n  echo building\n}\n",
+         {("greet", "function", 1, 3), ("build_all", "function", 4, 6)}),
+        ("dart", b"class Worker {\n  bool execute() { return true; }\n}\nmixin Loggable {}\nenum Status { ok, fail }\n",
+         {("Worker", "class", 1, 3), ("execute", "function", 2, 2), ("Loggable", "mixin", 4, 4), ("Status", "enum", 5, 5)}),
+    ],
+)
+def test_language_pack_grammars_produce_expected_structural_symbols(language, source, expected):
+    import engineeringos.indexer as indexer_module
+    if indexer_module.parser_backend(language) != "tree-sitter (language-pack)":
+        pytest.skip(f"optional {language} language-pack grammar is not cached locally")
+    found = indexer_module._tree_sitter_symbols(source, language)
+    assert found is not None
+    assert expected <= set(found)
 
 
 def test_polyglot_dependency_edges_cover_javascript_go_and_csharp(tmp_path):

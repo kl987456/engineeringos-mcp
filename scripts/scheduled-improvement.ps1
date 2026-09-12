@@ -51,4 +51,7 @@ never do anything destructive or irreversible.
    stopped) as your final message.
 '@
 
-claude -p $prompt --permission-mode auto 2>&1 | Tee-Object -FilePath $logFile
+$claudeExe = "$env:USERPROFILE\.local\bin\claude.exe"
+if (-not (Test-Path $claudeExe)) { $claudeExe = "claude" }  # fall back to PATH lookup if the install location ever changes
+
+& $claudeExe -p $prompt --permission-mode auto 2>&1 | Tee-Object -FilePath $logFile

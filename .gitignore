@@ -10,3 +10,4 @@ work/
 .env
 .env.*
 audit*.jsonl
+scheduled-logs/

@@ -53,8 +53,28 @@ added:
 - Fixed an undeclared `httpx` test dependency (only surfaced by testing in
   a clean venv instead of the pre-existing, polluted global Python install
   — a good reminder to always verify in an isolated environment).
-- Local git repository initialized (this was previously untracked entirely).
+- Local git repository initialized (this was previously untracked entirely),
+  then pushed to a new public GitHub repo at the user's request:
+  https://github.com/kl987456/engineeringos-mcp. `.github/workflows/ci.yml`
+  now runs for real on every push — it never had before.
+- **Real CI immediately paid for itself**: the first run failed on the
+  `httpx` gap above (this venv's `[test]` extra wasn't in the CI install
+  step); the second run then failed two tests only on GitHub's Ubuntu
+  runner, never locally on Windows — `shutil.which("sem")` was resolving
+  to GNU Parallel's unrelated `sem` (semaphore) command, which ships on
+  those runners, making the code believe a real semantic-impact tool was
+  installed when it wasn't. Fixed by requiring the already-documented
+  `ENGINEERINGOS_SEM_BIN` explicitly everywhere (`impact_tools.py`,
+  `server.py`, `preflight.py`) instead of also guessing via PATH. CI is
+  green as of the `Fix sem PATH-collision bug...` commit. This is exactly
+  why "keep on improving" needs real CI, not just local testing — noted
+  here because it's a good example of the project's own "evidence over
+  assumption" principle catching a bug about itself.
 - A project-local `.venv` is now the documented, recommended setup.
+- `scripts/scheduled-improvement.ps1` + a weekly Windows Scheduled Task
+  ("EngineeringOS Weekly Improvement") drive ongoing work between sessions
+  — it reads this file, verifies tests pass, implements the top item
+  below, and commits locally (never pushes without a human's say-so).
 
 **Concrete operational lesson from this pass**: installing Semgrep into
 `engineeringos-mcp`'s own venv silently downgraded the `mcp` SDK dependency
@@ -104,8 +124,6 @@ manager (winget/apt/brew) — never `pip install` alongside this package.
   original design doc calls this multi-year-horizon; still true.
 - **ragas/deepeval (V3 RAG/LLM diagnostics)** — lower leverage than the
   gaps above; revisit once the LSP-backend question is actually resolved.
-- **GitHub remote + hosted CI** — git is local-only so far; pushing to a
-  remote is a separate, explicit user decision.
 - **Elixir tree-sitter mapping** — its grammar has no distinct def/call
   node types (confirmed empirically: a bare function call and a `def` both
   parse as the same generic `call` node), so this needs callee-identifier
@@ -116,16 +134,26 @@ manager (winget/apt/brew) — never `pip install` alongside this package.
 ## Suggested next increment (pick the top unchecked item; re-derive priority if project state has changed)
 
 1. [ ] Retry the disk cleanup (see above) — zero-risk, high-value hygiene.
-2. [ ] Fix the `tree-sitter`/`tree-sitter-<lang>` version pins in
-   `pyproject.toml`'s `parsing` extra if a fresh install ever fails — it
-   resolved cleanly in this session's venv (base `tree-sitter` landed at
-   0.26.0 against the `>=0.25.2,<0.27` pin, all 12 languages installed and
-   parsed correctly), so this may already be fine; re-verify on a fresh
-   install before assuming otherwise.
-3. [ ] Re-test `multilspy` on Linux/macOS per the note above; only pursue
-   further if it behaves differently there.
-4. [ ] Consider `ragas`/`deepeval` for V3 once V1/V2 gaps are exhausted.
-5. [ ] Validate the wedge with real target customers (master doc §10) —
+   Already pre-approved by the user; only blocked by a runtime permission
+   gate in one session, not by anything about the action itself.
+2. [x] ~~Fix the tree-sitter version pins~~ — verified fine: CI now
+   installs `[parsing,parsing-pack]` fresh on every run and passes, so the
+   12-pinned-package path and the language-pack path both genuinely work
+   from a clean install, not just in one dev's local venv.
+3. [ ] Re-test `multilspy` on Linux/macOS per the note above (GitHub
+   Actions' `ubuntu-latest` runner is a convenient way to do this without
+   needing a non-Windows dev machine); only pursue further if it behaves
+   differently there.
+4. [x] ~~Audit other `shutil.which(` call sites for the same collision
+   class~~ — done same session: every other name (`mcp-scanner`,
+   `semgrep`, `gitleaks`, `osv-scanner`, and every `test_runners.py`
+   toolchain name) is either unambiguous or, in `test_runners.py`'s case,
+   additionally gated on a matching manifest file being present — a
+   materially different, safer pattern than `sem`'s old ungated PATH
+   check. `sem` (a 3-letter name colliding with GNU Parallel) was the
+   one real instance of this bug class, not a symptom of a wider pattern.
+5. [ ] Consider `ragas`/`deepeval` for V3 once V1/V2 gaps are exhausted.
+6. [ ] Validate the wedge with real target customers (master doc §10) —
    this was never about more building; it's still the actual open question
    behind all of the above.
 

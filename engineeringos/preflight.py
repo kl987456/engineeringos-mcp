@@ -43,12 +43,17 @@ def check_environment() -> dict:
 
     worker = bool(os.environ.get("ENGINEERINGOS_TEST_WORKER"))
     add("ENGINEERINGOS_TEST_WORKER", worker, "Sandbox worker is configured" if worker else "Sandbox worker is missing")
-    scanner = bool(os.environ.get("ENGINEERINGOS_MCP_SCANNER") or shutil.which("mcp-scan") or shutil.which("agent-scan"))
+    scanner = bool(os.environ.get("ENGINEERINGOS_MCP_SCANNER") or shutil.which("mcp-scanner") or shutil.which("mcp-scan") or shutil.which("agent-scan"))
     add("security_scanner", scanner, "Security scanner is available" if scanner else "Security scanner is unavailable", required=False)
     lsp = bool(os.environ.get("ENGINEERINGOS_LSP_ADAPTER"))
     add("structural_symbol_adapter", lsp, "Structural symbol adapter is configured" if lsp else "Structural symbol adapter is unavailable", required=False)
-    sem = bool(os.environ.get("ENGINEERINGOS_SEM_BIN") or shutil.which("sem"))
+    sem = bool(os.environ.get("ENGINEERINGOS_SEM_BIN"))  # PATH auto-detection deliberately omitted — see impact_tools.py
     add("semantic_impact", sem, "Semantic impact adapter is available" if sem else "Semantic impact adapter is unavailable", required=False)
+    semgrep = bool(os.environ.get("ENGINEERINGOS_SEMGREP_BIN") or shutil.which("semgrep")) and bool(os.environ.get("ENGINEERINGOS_SEMGREP_CONFIG"))
+    gitleaks = bool(os.environ.get("ENGINEERINGOS_GITLEAKS_BIN") or shutil.which("gitleaks"))
+    add("code_security_scan", semgrep or gitleaks, f"Code security scanning is available (semgrep={semgrep}, gitleaks={gitleaks})" if (semgrep or gitleaks) else "Neither Semgrep nor Gitleaks is configured", required=False)
+    osv_scanner = bool(os.environ.get("ENGINEERINGOS_OSV_SCANNER_BIN") or shutil.which("osv-scanner"))
+    add("vulnerability_scan", osv_scanner, "osv-scanner is available" if osv_scanner else "osv-scanner is unavailable", required=False)
     for variable, default, maximum in (
         ("ENGINEERINGOS_RATE_LIMIT_PER_MINUTE", 120, 1_000_000),
         ("ENGINEERINGOS_RATE_LIMIT_KEYS", 10_000, 1_000_000),

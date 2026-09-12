@@ -39,7 +39,7 @@ app = MCPServer("EngineeringOS", version=__version__)
 @app.resource("engineeringos://capabilities", name="capabilities", title="EngineeringOS capabilities", mime_type="application/json")
 def capabilities() -> str:
     scanner = bool(os.environ.get("ENGINEERINGOS_MCP_SCANNER") or shutil.which("mcp-scanner") or shutil.which("mcp-scan") or shutil.which("agent-scan"))
-    semantic = bool(os.environ.get("ENGINEERINGOS_SEM_BIN") or shutil.which("sem"))
+    semantic = bool(os.environ.get("ENGINEERINGOS_SEM_BIN"))  # PATH auto-detection deliberately omitted — see impact_tools.py
     worker = bool(os.environ.get("ENGINEERINGOS_TEST_WORKER"))
     lsp_adapter = bool(os.environ.get("ENGINEERINGOS_LSP_ADAPTER"))
     semgrep = bool(os.environ.get("ENGINEERINGOS_SEMGREP_BIN") or shutil.which("semgrep"))

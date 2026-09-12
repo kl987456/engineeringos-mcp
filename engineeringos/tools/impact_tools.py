@@ -2,14 +2,18 @@ from __future__ import annotations
 import subprocess
 import json
 import os
-import shutil
 from pathlib import Path
 from ..evidence import EvidenceItem, ToolHardFailure
 from ..security import allowed_path
 
 def change_impact(repo_path: str, revision: str = "HEAD", entity: str | None = None) -> list[EvidenceItem]:
     repo = allowed_path(repo_path, must_be_dir=True)
-    sem_bin = os.environ.get("ENGINEERINGOS_SEM_BIN") or shutil.which("sem")
+    # Deliberately not auto-detected via shutil.which("sem"): GNU Parallel
+    # ships an unrelated `sem` (semaphore) command on many Linux systems,
+    # including GitHub Actions' standard Ubuntu runners, so PATH lookup
+    # alone would silently pick up the wrong binary. Require the operator
+    # to point at the real ataraxy-labs/sem tool explicitly.
+    sem_bin = os.environ.get("ENGINEERINGOS_SEM_BIN")
     fallback: list[EvidenceItem] = []
     if entity and sem_bin:
         try:

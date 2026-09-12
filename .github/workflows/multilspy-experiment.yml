@@ -39,6 +39,8 @@ jobs:
               symbols, tree = server.request_document_symbols("app.py")
               names = sorted(s["name"] for s in symbols)
               print("SYMBOLS:", names)
+              for s in symbols:
+                  print("RAW:", dict(s))
               assert "Worker" in names and "execute" in names and "helper" in names, f"unexpected symbols: {names}"
           print("MULTILSPY_LINUX_RESULT: SUCCESS")
           PYEOF

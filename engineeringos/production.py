@@ -17,6 +17,7 @@ from .security import PermissionEnforcementMiddleware, RequestRateLimitMiddlewar
 from .server import (
     analyze_change,
     find_symbol,
+    git_diff,
     health,
     index_code,
     investigate,
@@ -81,6 +82,11 @@ def _register(server: MCPServer) -> None:
         description="Commits touching a repo (or one file) within a time window, with subjects and refs.",
         annotations=annotations_for("recent_changes"),
     )(recent_changes)
+    server.tool(
+        name="git_diff",
+        description="Show the stat-and-patch diff for a single Git commit, as evidence for a specific change.",
+        annotations=annotations_for("git_diff"),
+    )(git_diff)
     server.tool(
         name="search_code",
         description="Bounded text search across supported source and configuration files; returns file-and-line evidence.",

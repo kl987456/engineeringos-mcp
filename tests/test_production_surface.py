@@ -331,6 +331,37 @@ def test_permission_middleware_requires_trusted_approval_claim(monkeypatch):
     assert asyncio.run(middleware(context, call_next)) is context
 
 
+def test_tool_registration_stays_in_sync_across_server_production_and_permissions(tmp_path, monkeypatch):
+    """Regression guard: git_diff was tiered in permissions.yaml but never
+    registered as a callable tool in either server.py or production.py.
+    Every tool declared in permissions.yaml must be registered in both the
+    stdio server and the production HTTP server, and vice versa, and both
+    copies of permissions.yaml must agree — nothing else catches this drift."""
+    import importlib
+    import yaml
+    import engineeringos.permissions as permissions_module
+    import engineeringos.server as server_module
+
+    monkeypatch.setenv("ENGINEERINGOS_OIDC_ISSUER", "https://issuer.test")
+    monkeypatch.setenv("ENGINEERINGOS_OIDC_AUDIENCE", "https://mcp.test")
+    monkeypatch.setenv("ENGINEERINGOS_TENANT_ROOT", str(tmp_path))
+    monkeypatch.setenv("ENGINEERINGOS_INDEX_ROOT", str(tmp_path.parent / f"{tmp_path.name}-indexes"))
+    monkeypatch.setenv("ENGINEERINGOS_ALLOWED_HOSTS", "test:80")
+    monkeypatch.setenv("ENGINEERINGOS_REQUIRE_SANDBOX_WORKER", "0")
+    import engineeringos.production as production
+    production = importlib.reload(production)
+
+    root_config = yaml.safe_load(Path(__file__).resolve().parent.parent.joinpath("config", "permissions.yaml").read_text())
+    packaged_config = yaml.safe_load(Path(__file__).resolve().parent.parent.joinpath("engineeringos", "config", "permissions.yaml").read_text())
+    assert root_config["tools"] == packaged_config["tools"], "the two permissions.yaml copies have drifted apart"
+
+    permission_tools = set(permissions_module.TOOL_TIERS)
+    stdio_tools = {t.name for t in asyncio.run(server_module.app.list_tools())}
+    production_tools = {t.name for t in asyncio.run(production.app.list_tools())}
+    assert permission_tools == stdio_tools, f"mismatch: {permission_tools ^ stdio_tools}"
+    assert permission_tools == production_tools, f"mismatch: {permission_tools ^ production_tools}"
+
+
 def test_production_http_requires_bearer_and_allows_health(tmp_path, monkeypatch):
     monkeypatch.setenv("ENGINEERINGOS_OIDC_ISSUER", "https://issuer.test")
     monkeypatch.setenv("ENGINEERINGOS_OIDC_AUDIENCE", "https://mcp.test")

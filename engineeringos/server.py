@@ -88,6 +88,19 @@ def recent_changes(repo_path: str, file_path: str | None = None, since: str = "3
 
 
 @app.tool(
+    name="git_diff",
+    description="Show the stat-and-patch diff for a single Git commit, as evidence for a specific change.",
+    annotations=annotations_for("git_diff"),
+)
+def git_diff(repo_path: str, commit: str = "HEAD") -> dict:
+    try:
+        return _as_result([git_tools.git_diff(repo_path, commit)], "git_diff")
+    except ToolHardFailure as e:
+        audit_record("git_diff", status="error", detail=str(e))
+        return {"isError": True, "error": str(e)}
+
+
+@app.tool(
     name="search_code",
     description="Bounded text search across supported source and configuration files; returns file-and-line evidence.",
     annotations=annotations_for("search_code"),

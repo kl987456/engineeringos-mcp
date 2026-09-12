@@ -4,7 +4,24 @@ Evidence-first engineering workflows for MCP clients. The server gathers code, G
 
 See [`ROADMAP.md`](ROADMAP.md) for current state, what's deliberately deferred and why, and the suggested next increment.
 
-## Local run
+## Quick install
+
+To just use the CLI (not develop the project itself), install straight from GitHub — no PyPI account needed:
+
+```powershell
+irm https://raw.githubusercontent.com/kl987456/engineeringos-mcp/master/install.ps1 | iex
+```
+```bash
+curl -fsSL https://raw.githubusercontent.com/kl987456/engineeringos-mcp/master/install.sh | bash
+```
+
+Both scripts just run `pip install` against this repo — read [`install.ps1`](install.ps1) or [`install.sh`](install.sh) before piping them into your shell, same as you would for any installer. This gives you `engineeringos-mcp`, `engineeringos-dashboard`, `engineeringos-eval`, `engineeringos-preflight`, and `engineeringos-map` on PATH. Register it with Claude Code globally (works in every project, not just this repo):
+
+```bash
+claude mcp add engineeringos -s user -- engineeringos-mcp
+```
+
+## Local run (for developing EngineeringOS itself)
 
 Use a project-local virtual environment rather than installing into your system Python — this keeps EngineeringOS's dependencies isolated and, critically, avoids version conflicts with any operator-installed scanner CLI you later add (see the scanner setup note below).
 

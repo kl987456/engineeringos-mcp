@@ -24,7 +24,7 @@ from .permissions import annotations_for
 from .evidence import ToolHardFailure
 from .tools import git_tools, search_tools, test_tools, log_tools
 from .tools import impact_tools, security_tools, dependency_tools, diagnostic_tools, inventory_tools, lsp_tools, language_tools
-from .tools import code_security_tools, vulnerability_tools
+from .tools import code_security_tools, vulnerability_tools, lsp_default
 from . import indexer
 from . import code_maps
 from . import __version__
@@ -46,6 +46,7 @@ def capabilities() -> str:
     semgrep_configured = semgrep and bool(os.environ.get("ENGINEERINGOS_SEMGREP_CONFIG"))
     gitleaks = bool(os.environ.get("ENGINEERINGOS_GITLEAKS_BIN") or shutil.which("gitleaks"))
     osv_scanner = bool(os.environ.get("ENGINEERINGOS_OSV_SCANNER_BIN") or shutil.which("osv-scanner"))
+    lsp_default_languages = {language: lsp_default.is_available(language) for language in sorted(lsp_default.DEFAULT_LANGUAGES)}
     parsers = {language: indexer.parser_backend(language) for language in sorted(set(indexer.LANGUAGES.values()))}
     return json.dumps({
         "server": "EngineeringOS",
@@ -56,6 +57,7 @@ def capabilities() -> str:
             "security_scanner": scanner,
             "sandbox_worker": worker,
             "structural_symbol_adapter": lsp_adapter,
+            "structural_symbol_default": lsp_default_languages,
             "sast_semgrep": semgrep_configured,
             "secret_scan_gitleaks": gitleaks,
             "vulnerability_scan_osv": osv_scanner,

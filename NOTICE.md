@@ -8,6 +8,7 @@ EngineeringOS depends on the following permissively licensed projects:
 - pytest, MIT License.
 - Tree-sitter and the optional per-language `tree-sitter-<lang>` grammar packages (`parsing` extra), MIT License.
 - `tree-sitter-language-pack` (`parsing-pack` extra), MIT License.
+- `multilspy` (`lsp` extra), MIT License.
 
 The exact resolved versions are recorded by the deployment environment's lock file or image build. Review upstream licenses before commercial distribution.
 

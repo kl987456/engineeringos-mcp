@@ -98,6 +98,22 @@ added:
   and regeneratable, so this made no git-tracked change — confirmed via
   `git status --short` returning empty and the full suite still passing
   afterward.
+- **`multilspy` re-tested on Linux via a manual GitHub Actions workflow
+  (`.github/workflows/multilspy-experiment.yml`) — it was Windows-specific
+  after all.** The identical trivial-Python-file scenario that hung for
+  several minutes on Windows completed correctly in under 2 seconds on
+  `ubuntu-latest`, with the exact expected symbols. Given that, actually
+  implemented the default `lsp_symbols` backend
+  (`engineeringos/tools/lsp_default.py`): Python only for now (the one
+  language verified end-to-end and the only one multilspy doesn't need an
+  external language-server download for), disabled by default on Windows
+  specifically pending a root-cause fix
+  (`ENGINEERINGOS_LSP_DEFAULT_FORCE_WINDOWS=1` overrides this), with the
+  same path/symbol-count/name-length caps as the operator-adapter path.
+  `capabilities()`/`preflight.py` report per-language availability
+  honestly rather than a single blanket flag. This project's own
+  production Docker deployment (see `Dockerfile`) is Linux-based, so the
+  Windows restriction mainly affects local dev on Windows, not hosted use.
 
 **Concrete operational lesson from this pass**: installing Semgrep into
 `engineeringos-mcp`'s own venv silently downgraded the `mcp` SDK dependency
@@ -110,26 +126,6 @@ manager (winget/apt/brew) — never `pip install` alongside this package.
 
 ## Investigated and deferred this pass (with reasoning — do not silently re-attempt without reading this)
 
-- **`multilspy` as a default `lsp_symbols` backend**: investigated in an
-  isolated venv. `SyncLanguageServer.request_document_symbols()` is exactly
-  the right shape (synchronous, no asyncio bridging needed), and Python
-  needs no external download (bundles `jedi-language-server` as a normal
-  pip dependency). **However**, a live test against a trivial 6-line Python
-  file — the easiest possible case — did not return a result even after
-  several minutes with a 30-second timeout parameter passed to
-  `SyncLanguageServer.create()`, strongly suggesting the timeout doesn't
-  actually bound startup on this platform, or the process hangs. This is
-  a library at version 0.0.15 (pre-1.0, originally a NeurIPS-2023 research
-  artifact), and this result is disqualifying for a "default, always-on"
-  backend inside a tool call with a real latency budget. **Next step if
-  revisited**: test on Linux/macOS (this was tested on Windows — the hang
-  may be platform-specific to how multilspy manages the LSP subprocess on
-  Windows); if it reproduces cross-platform, this library is not viable as
-  a default backend and the seam should stay purely operator-adapter-based,
-  or a different, more mature per-language LSP wrapper should be evaluated
-  instead (do not re-try the *same* library without a different platform
-  or a fix upstream). `lsp_symbols` remains exactly as documented: a pure
-  `ENGINEERINGOS_LSP_ADAPTER` seam with no bundled default.
 - **Real sandbox (E2B/Firecracker) for HIGH_RISK tools** — no HIGH_RISK or
   RESTRICTED_WRITE tool exists yet to need it; premature to commit to a
   paid vendor before any tool would use it.
@@ -146,19 +142,26 @@ manager (winget/apt/brew) — never `pip install` alongside this package.
 
 ## Suggested next increment (pick the top unchecked item; re-derive priority if project state has changed)
 
-1. [ ] Re-test `multilspy` on Linux/macOS per the note above (GitHub
-   Actions' `ubuntu-latest` runner is a convenient way to do this without
-   needing a non-Windows dev machine); only pursue further if it behaves
-   differently there.
-2. [ ] Consider `ragas`/`deepeval` for V3 once V1/V2 gaps are exhausted.
-3. [ ] Validate the wedge with real target customers (master doc §10) —
+1. [ ] Root-cause the Windows multilspy hang, or accept it and move on —
+   don't just re-try blindly. If revisited: instrument exactly where it
+   blocks on Windows (subprocess pipe handling is the most likely
+   suspect for a library whose CI is presumably Linux-first) rather than
+   guessing again.
+2. [ ] Verify and enable additional multilspy languages one at a time
+   (Go and Rust are reasonable next candidates — both have a single,
+   well-known, commonly-preinstalled language server binary — gopls and
+   rust-analyzer respectively) — each needs its own "does it need a
+   silent download, does it actually work" check like Python got, not a
+   bulk enable.
+3. [ ] Consider `ragas`/`deepeval` for V3 once V1/V2 gaps are exhausted.
+4. [ ] Validate the wedge with real target customers (master doc §10) —
    this was never about more building; it's still the actual open question
    behind all of the above.
 
 Completed items are folded into "State as of 2026-09-12" above rather
 than kept here as struck-through history — see that section for the
-tree-sitter-pin verification, the `shutil.which` collision audit, and the
-disk cleanup, all resolved this pass.
+tree-sitter-pin verification, the `shutil.which` collision audit, the
+disk cleanup, and the multilspy default backend, all resolved this pass.
 
 Keep this list short and current — prune finished items into "State as of
 <date>" above rather than letting checkmarks accumulate here.

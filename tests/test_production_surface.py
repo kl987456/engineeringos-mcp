@@ -22,6 +22,7 @@ from engineeringos.tools.impact_tools import change_impact
 from engineeringos.tools.git_tools import git_diff
 from engineeringos.tools.log_tools import search_logs
 from engineeringos.tools import lsp_tools
+from engineeringos.tools import lsp_default
 from engineeringos.tools import security_tools
 from engineeringos.tools import test_tools
 from engineeringos.tools.language_tools import language_profile
@@ -138,6 +139,54 @@ def test_lsp_adapter_contract_is_bounded_and_path_scoped(monkeypatch, tmp_path):
     evidence = lsp_tools.symbols(str(tmp_path), "app.py", "python")
     assert evidence[0].summary == "function checkout"
     assert '"file_path": "app.py"' in calls["request"]
+
+
+def test_lsp_symbols_falls_through_to_default_backend_when_adapter_unset(tmp_path, monkeypatch):
+    monkeypatch.delenv("ENGINEERINGOS_LSP_ADAPTER", raising=False)
+    (tmp_path / "app.py").write_text("def f():\n    pass\n", encoding="utf-8")
+    with pytest.raises(Exception) as excinfo:
+        lsp_tools.symbols(str(tmp_path), "app.py", "python")
+    # The old immediate hard-fail (no fallback at all) must be gone now that
+    # a default backend seam exists, whatever this environment's actual
+    # multilspy/platform availability happens to be.
+    assert "operator-configured LSP adapter is installed" not in str(excinfo.value)
+
+
+def test_lsp_default_is_available_gates_by_language_and_platform(monkeypatch):
+    monkeypatch.setattr(lsp_default.platform, "system", lambda: "Linux")
+    assert lsp_default.is_available("go") is False  # not in DEFAULT_LANGUAGES regardless of platform
+    assert lsp_default.is_available(None) is False
+    monkeypatch.setattr(lsp_default.platform, "system", lambda: "Windows")
+    monkeypatch.delenv("ENGINEERINGOS_LSP_DEFAULT_FORCE_WINDOWS", raising=False)
+    assert lsp_default.is_available("python") is False  # Windows gate, regardless of multilspy install state
+
+
+def test_lsp_default_symbols_reports_windows_disabled_reason(tmp_path, monkeypatch):
+    monkeypatch.setattr(lsp_default.platform, "system", lambda: "Windows")
+    monkeypatch.delenv("ENGINEERINGOS_LSP_DEFAULT_FORCE_WINDOWS", raising=False)
+    (tmp_path / "app.py").write_text("def f():\n    pass\n", encoding="utf-8")
+    with pytest.raises(Exception, match="disabled on Windows"):
+        lsp_default.symbols(tmp_path, "app.py", "python", 30)
+
+
+def test_lsp_default_convert_symbols_maps_real_multilspy_shape():
+    # Field shape confirmed empirically against a real multilspy run on
+    # Linux (see ROADMAP.md) — not guessed.
+    raw = [
+        {"name": "Worker", "kind": 5, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 2, "character": 19}}, "detail": "class Worker"},
+        {"name": "execute", "kind": 6, "range": {"start": {"line": 1, "character": 4}, "end": {"line": 2, "character": 19}}, "detail": "def execute"},
+        {"name": "helper", "kind": 12, "range": {"start": {"line": 4, "character": 0}, "end": {"line": 5, "character": 29}}, "detail": "def helper"},
+    ]
+    evidence = lsp_default._convert_symbols(raw, "app.py")
+    assert [e.summary for e in evidence] == ["class Worker", "method execute", "function helper"]
+    assert evidence[0].ref == "app.py#L1-L3"
+    assert evidence[2].ref == "app.py#L5-L6"
+
+
+def test_lsp_default_convert_symbols_rejects_unbounded_list():
+    raw = [{"name": "x", "kind": 12}] * (lsp_default.MAX_SYMBOLS + 1)
+    with pytest.raises(Exception, match="unbounded"):
+        lsp_default._convert_symbols(raw, "app.py")
 
 
 def test_security_scanner_rejects_unbounded_output(monkeypatch, tmp_path):

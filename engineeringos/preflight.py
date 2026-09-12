@@ -7,6 +7,7 @@ import shutil
 from pathlib import Path
 
 from .limits import positive_int_env
+from .tools import lsp_default
 
 
 def check_environment() -> dict:
@@ -47,6 +48,9 @@ def check_environment() -> dict:
     add("security_scanner", scanner, "Security scanner is available" if scanner else "Security scanner is unavailable", required=False)
     lsp = bool(os.environ.get("ENGINEERINGOS_LSP_ADAPTER"))
     add("structural_symbol_adapter", lsp, "Structural symbol adapter is configured" if lsp else "Structural symbol adapter is unavailable", required=False)
+    for language in sorted(lsp_default.DEFAULT_LANGUAGES):
+        available = lsp_default.is_available(language)
+        add(f"structural_symbol_default_{language}", available, f"Default LSP backend is available for {language}" if available else f"Default LSP backend is unavailable for {language}", required=False)
     sem = bool(os.environ.get("ENGINEERINGOS_SEM_BIN"))  # PATH auto-detection deliberately omitted — see impact_tools.py
     add("semantic_impact", sem, "Semantic impact adapter is available" if sem else "Semantic impact adapter is unavailable", required=False)
     semgrep = bool(os.environ.get("ENGINEERINGOS_SEMGREP_BIN") or shutil.which("semgrep")) and bool(os.environ.get("ENGINEERINGOS_SEMGREP_CONFIG"))

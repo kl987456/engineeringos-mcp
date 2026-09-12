@@ -9,6 +9,7 @@ from pathlib import Path
 
 from ..evidence import EvidenceItem, ToolHardFailure
 from ..security import allowed_path
+from . import lsp_default
 
 MAX_OUTPUT_BYTES = 1_000_000
 MAX_SYMBOLS = 500
@@ -18,7 +19,7 @@ def symbols(repo_path: str, file_path: str, language: str | None = None, timeout
     repo = allowed_path(repo_path, must_be_dir=True)
     adapter_config = os.environ.get("ENGINEERINGOS_LSP_ADAPTER")
     if not adapter_config:
-        raise ToolHardFailure("Can't resolve structural symbols — no operator-configured LSP adapter is installed. Configure ENGINEERINGOS_LSP_ADAPTER before using this tool.")
+        return lsp_default.symbols(repo, file_path, language, timeout)
     candidate = (repo / file_path).resolve()
     if candidate != repo and repo not in candidate.parents or not candidate.is_file():
         raise ToolHardFailure("Can't resolve structural symbols — the requested file is outside the repository or unavailable.")

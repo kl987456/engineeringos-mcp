@@ -1,0 +1,46 @@
+name: multilspy Linux experiment
+# Manual-only diagnostic, not part of the regular CI gate. See ROADMAP.md
+# ("Investigated and deferred this pass" -> multilspy) for why this exists:
+# multilspy hung on Windows even for a trivial 6-line Python file with a
+# 30-second timeout passed to SyncLanguageServer.create(). This re-tests
+# the identical scenario on Linux to see whether that was Windows-specific.
+on:
+  workflow_dispatch: {}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install multilspy
+      - name: Run bounded multilspy smoke test
+        run: |
+          mkdir -p /tmp/mlspy-test-repo
+          cat > /tmp/mlspy-test-repo/app.py <<'PYEOF'
+          class Worker:
+              def execute(self) -> bool:
+                  return True
+
+          def helper():
+              return Worker().execute()
+          PYEOF
+          cat > /tmp/mlspy_smoke.py <<'PYEOF'
+          import sys
+          from multilspy import SyncLanguageServer
+          from multilspy.multilspy_config import MultilspyConfig, Language
+          from multilspy.multilspy_logger import MultilspyLogger
+
+          config = MultilspyConfig(code_language=Language.PYTHON)
+          logger = MultilspyLogger()
+          server = SyncLanguageServer.create(config, logger, "/tmp/mlspy-test-repo", timeout=30)
+          with server.start_server():
+              symbols, tree = server.request_document_symbols("app.py")
+              names = sorted(s["name"] for s in symbols)
+              print("SYMBOLS:", names)
+              assert "Worker" in names and "execute" in names and "helper" in names, f"unexpected symbols: {names}"
+          print("MULTILSPY_LINUX_RESULT: SUCCESS")
+          PYEOF
+          timeout 90 python /tmp/mlspy_smoke.py
+          echo "exit code: $?"

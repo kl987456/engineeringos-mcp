@@ -69,12 +69,35 @@ added:
   green as of the `Fix sem PATH-collision bug...` commit. This is exactly
   why "keep on improving" needs real CI, not just local testing — noted
   here because it's a good example of the project's own "evidence over
-  assumption" principle catching a bug about itself.
+  assumption" principle catching a bug about itself. Audited every other
+  `shutil.which(` call site for the same collision class while fixing
+  this: all other names (`mcp-scanner`, `semgrep`, `gitleaks`,
+  `osv-scanner`, every `test_runners.py` toolchain name) are either
+  unambiguous or additionally gated on a matching manifest file being
+  present in the target repo — `sem` (a 3-letter name colliding with GNU
+  Parallel) was the one real instance of this bug, not a wider pattern.
+- The `parsing`/`parsing-pack` version pins are confirmed fine on a
+  genuinely clean install, not just this one dev's venv: CI installs both
+  extras fresh on every run and passes (base `tree-sitter` resolves to
+  0.26.0 against the `>=0.25.2,<0.27` pin, all 12 pinned languages parse
+  correctly, kotlin/lua/bash/dart resolve via the language-pack prefetch
+  step).
 - A project-local `.venv` is now the documented, recommended setup.
 - `scripts/scheduled-improvement.ps1` + a weekly Windows Scheduled Task
   ("EngineeringOS Weekly Improvement") drive ongoing work between sessions
   — it reads this file, verifies tests pass, implements the top item
-  below, and commits locally (never pushes without a human's say-so).
+  below, and commits locally (never pushes without a human's say-so). Its
+  settings were also loosened (`DisallowStartIfOnBatteries`/
+  `StopIfGoingOnBatteries` off, `StartWhenAvailable` on) so it doesn't
+  silently skip a week if the machine is on battery or was off/logged out
+  at the scheduled time; it still requires an interactive logon
+  (`LogonType: Interactive`) to actually fire.
+- Disk cleanup done: the 36 `dist-final*` snapshots, `dist/`, `build/`,
+  `engineeringos_mcp.egg-info/`, `engineeringos/work/`, and the sibling
+  `../work/` scratch contents are gone. All of it was already gitignored
+  and regeneratable, so this made no git-tracked change — confirmed via
+  `git status --short` returning empty and the full suite still passing
+  afterward.
 
 **Concrete operational lesson from this pass**: installing Semgrep into
 `engineeringos-mcp`'s own venv silently downgraded the `mcp` SDK dependency
@@ -107,16 +130,6 @@ manager (winget/apt/brew) — never `pip install` alongside this package.
   instead (do not re-try the *same* library without a different platform
   or a fix upstream). `lsp_symbols` remains exactly as documented: a pure
   `ENGINEERINGOS_LSP_ADAPTER` seam with no bundled default.
-- **Disk cleanup of `dist-final*`/`wheelcheck*`/build cruft**: the user
-  approved deleting 36 `dist-final*` snapshots, `dist/`, `build/`,
-  `engineeringos_mcp.egg-info/`, `engineeringos/work/`, and the sibling
-  `../work/` scratch contents (all gitignored, all regeneratable, none of
-  it source). The actual deletion was blocked by the auto-mode permission
-  classifier mid-session and not retried around it per policy. **Next
-  step**: retry the deletion (it is pre-approved) or ask the user to grant
-  the permission directly; the risk is zero (already gitignored, disk
-  hygiene only) but the classifier's decision was respected rather than
-  routed around.
 - **Real sandbox (E2B/Firecracker) for HIGH_RISK tools** — no HIGH_RISK or
   RESTRICTED_WRITE tool exists yet to need it; premature to commit to a
   paid vendor before any tool would use it.
@@ -133,29 +146,19 @@ manager (winget/apt/brew) — never `pip install` alongside this package.
 
 ## Suggested next increment (pick the top unchecked item; re-derive priority if project state has changed)
 
-1. [ ] Retry the disk cleanup (see above) — zero-risk, high-value hygiene.
-   Already pre-approved by the user; only blocked by a runtime permission
-   gate in one session, not by anything about the action itself.
-2. [x] ~~Fix the tree-sitter version pins~~ — verified fine: CI now
-   installs `[parsing,parsing-pack]` fresh on every run and passes, so the
-   12-pinned-package path and the language-pack path both genuinely work
-   from a clean install, not just in one dev's local venv.
-3. [ ] Re-test `multilspy` on Linux/macOS per the note above (GitHub
+1. [ ] Re-test `multilspy` on Linux/macOS per the note above (GitHub
    Actions' `ubuntu-latest` runner is a convenient way to do this without
    needing a non-Windows dev machine); only pursue further if it behaves
    differently there.
-4. [x] ~~Audit other `shutil.which(` call sites for the same collision
-   class~~ — done same session: every other name (`mcp-scanner`,
-   `semgrep`, `gitleaks`, `osv-scanner`, and every `test_runners.py`
-   toolchain name) is either unambiguous or, in `test_runners.py`'s case,
-   additionally gated on a matching manifest file being present — a
-   materially different, safer pattern than `sem`'s old ungated PATH
-   check. `sem` (a 3-letter name colliding with GNU Parallel) was the
-   one real instance of this bug class, not a symptom of a wider pattern.
-5. [ ] Consider `ragas`/`deepeval` for V3 once V1/V2 gaps are exhausted.
-6. [ ] Validate the wedge with real target customers (master doc §10) —
+2. [ ] Consider `ragas`/`deepeval` for V3 once V1/V2 gaps are exhausted.
+3. [ ] Validate the wedge with real target customers (master doc §10) —
    this was never about more building; it's still the actual open question
    behind all of the above.
+
+Completed items are folded into "State as of 2026-09-12" above rather
+than kept here as struck-through history — see that section for the
+tree-sitter-pin verification, the `shutil.which` collision audit, and the
+disk cleanup, all resolved this pass.
 
 Keep this list short and current — prune finished items into "State as of
 <date>" above rather than letting checkmarks accumulate here.

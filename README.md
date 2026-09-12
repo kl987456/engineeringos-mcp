@@ -2,12 +2,17 @@
 
 Evidence-first engineering workflows for MCP clients. The server gathers code, Git, logs, and test evidence; it never invents a root-cause claim.
 
+See [`ROADMAP.md`](ROADMAP.md) for current state, what's deliberately deferred and why, and the suggested next increment.
+
 ## Local run
 
+Use a project-local virtual environment rather than installing into your system Python — this keeps EngineeringOS's dependencies isolated and, critically, avoids version conflicts with any operator-installed scanner CLI you later add (see the scanner setup note below).
+
 ```powershell
-python -m pip install -r requirements.txt
+python -m venv .venv
+.venv\Scripts\pip install -e .
 $env:PYTHONPATH = "."
-python -m engineeringos.server
+.venv\Scripts\python -m engineeringos.server
 ```
 
 After installing the package, use `engineeringos-mcp` for the local stdio server, `engineeringos-dashboard` for the local control room, `engineeringos-eval sample-repo` for the golden evidence regression, and `engineeringos-preflight` to validate production configuration without printing configured secret values.
@@ -39,6 +44,8 @@ Start the local-only control room with `python -m dashboard.server` and open `ht
 
 If the optional `sem` CLI is installed, set `ENGINEERINGOS_SEM_BIN` and pass an entity to `analyze_change` for entity-level impact analysis. The server falls back to Git evidence when `sem` is unavailable.
 
+`code_security_scan` runs Semgrep (SAST) and Gitleaks (secret detection) against the target repository from a disposable copy, each independently optional. Gitleaks needs no configuration beyond being on `PATH` or set via `ENGINEERINGOS_GITLEAKS_BIN`. Semgrep additionally requires `ENGINEERINGOS_SEMGREP_CONFIG` — a local rules file path, or a registry ruleset such as `p/security-audit` — since it has no config that is both meaningful and network-free by default; the tool reports an honest fallback for either scanner that isn't configured rather than failing outright, and only hard-fails if neither is. `vulnerability_scan` runs OSV-Scanner against detected dependency manifests for known-vulnerability matches; unlike the other scanners here, this queries the public osv.dev database by default (documented in the tool output's source label), and `ENGINEERINGOS_OSV_SCANNER_OFFLINE=1` switches to a pre-downloaded local database instead. Install all three as standalone tools — never into this project's own environment (see SECURITY.md for why).
+
 The `diagnostics` tool detects only approved project-native checks (Python compile, Ruff, ESLint, TypeScript, Go vet, and Cargo check), runs them from a disposable copy, and never accepts arbitrary commands from an MCP caller. `test_plan` discovers supported test projects without executing repository code. `run_tests` uses a fixed command allow-list for pytest, npm/pnpm/Yarn, Go, Cargo, .NET, Maven, Gradle, Swift, sbt, Dart, Mix, RSpec, PHPUnit, and CTest; callers may select a detected runner but can never supply a command. Network-avoiding/offline flags are used where the underlying runner supports them.
 
 After `index_code`, `dependency_graph` queries bounded direct callers or callees from the local SQLite symbol map. Python references are populated from its AST, while deterministic call edges are also extracted for supported non-Python languages; optional Tree-sitter and LSP adapters improve structural symbol fidelity.
@@ -51,7 +58,15 @@ Approval-required permission tiers are enforced from a trusted token claim, defa
 
 `lsp_symbols` is an optional structural adapter seam. Set `ENGINEERINGOS_LSP_ADAPTER` to an operator-owned executable that accepts `{repo_path, file_path, language, timeout_seconds}` JSON on stdin and returns `{"symbols": [{"name", "kind", "line", "end_line"}]}`. The MCP never accepts the adapter command from a caller.
 
-For stronger structural indexing, install the optional parser set with `python -m pip install -e ".[parsing]"`. The indexer records which backend it used in its evidence. If a grammar is unavailable, it safely falls back to Python AST or language-aware regex extraction rather than failing the repository scan. Indexing now recognizes Python, JavaScript/JSX, TypeScript/TSX, Go, Rust, Java, Kotlin, Ruby, PHP, C, C++, C#, Swift, Scala, Lua, shell, Dart, and Elixir; the optional native grammar set covers the most mature Tree-sitter packages while the remaining languages retain deterministic extraction fallbacks.
+For stronger structural indexing, install the optional parser set with `python -m pip install -e ".[parsing]"`. The indexer records which backend it used in its evidence (`python-ast`, `tree-sitter`, `tree-sitter (language-pack)`, or `regex-fallback`). If a grammar is unavailable, it safely falls back to Python AST or language-aware regex extraction rather than failing the repository scan. Indexing recognizes Python, JavaScript/JSX, TypeScript/TSX, Go, Rust, Java, Kotlin, Ruby, PHP, C, C++, C#, Swift, Scala, Lua, shell, Dart, and Elixir; `parsing` covers the 12 hand-tuned languages with native symbol-kind mappings (all but Kotlin, Lua, shell, and Dart).
+
+Install the additional `python -m pip install -e ".[parsing-pack]"` extra to enable real structural parsing for Kotlin, Lua, shell, and Dart too, backed by `tree-sitter-language-pack`. This backend never fetches a grammar over the network from inside a tool call — it only uses one already cached locally — so it needs a one-time, explicit prefetch before it activates for a given language:
+
+```powershell
+.venv\Scripts\python -c "import tree_sitter_language_pack as t; t.prefetch(['kotlin', 'lua', 'bash', 'dart'])"
+```
+
+Elixir intentionally stays on the regex fallback: its grammar has no distinct node types for a function definition versus an ordinary call, so a naive mapping would misreport call sites as definitions.
 
 Use `language_profile` before deeper analysis on a mixed repository. It reports source and test counts, indexed bytes, the actual parser backend selected for each detected language, and recognized build/dependency manifests without running project code.
 

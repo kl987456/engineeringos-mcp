@@ -1,10 +1,12 @@
 # Connect EngineeringOS to AI coding clients
 
-These examples use the local stdio server. Install the project first (include the parser extra for native polyglot indexing):
+These examples use the local stdio server. Install the project first (include the parser extras for native polyglot indexing):
 
 ```powershell
-python -m pip install ".[parsing]"
+python -m pip install ".[parsing,parsing-pack]"
 ```
+
+`parsing` covers 12 hand-tuned languages; `parsing-pack` additionally enables Kotlin, Lua, shell, and Dart once you prefetch their grammars once (see README). Install Semgrep, Gitleaks, and OSV-Scanner separately as standalone tools if you want `code_security_scan`/`vulnerability_scan` to do more than report an honest "not configured" fallback — never `pip install` them into this same environment (see SECURITY.md).
 
 The shared configuration in `examples/mcp-stdio.json` starts `python -m engineeringos.server`. It contains no credentials and performs no deployment.
 
@@ -42,8 +44,8 @@ Claude, Codex, Cursor, and Gemini can all use the same evidence contract, but th
 
 Suggested split:
 
-1. Investigator: run `repo_overview`, `recent_changes`, `search_code`, `search_logs`, and `run_tests` or `investigate`.
-2. Verifier: check `index_code`, `find_symbol`, `dependency_graph`, `diagnostics`, `security_scan`, and `analyze_change` independently.
+1. Investigator: run `repo_overview`, `recent_changes`, `git_diff`, `search_code`, `search_logs`, and `run_tests` or `investigate`.
+2. Verifier: check `index_code`, `find_symbol`, `dependency_graph`, `diagnostics`, `security_scan`, `code_security_scan`, `vulnerability_scan`, and `analyze_change` independently.
 3. Reconcile only conclusions supported by evidence returned by the MCP; keep disagreements visible.
 
 For privacy-sensitive repositories, run `index_code` and `export_code_map` locally, ingest the exported map, and have the verifier use `map_find_symbol` and `map_dependency_graph`. Those hosted queries do not require raw source files.

@@ -2,7 +2,7 @@
 
 Evidence-first engineering workflows for MCP clients. The server gathers code, Git, logs, and test evidence; it never invents a root-cause claim.
 
-See [`ROADMAP.md`](ROADMAP.md) for current state, what's deliberately deferred and why, and the suggested next increment.
+See [`ROADMAP.md`](ROADMAP.md) for current state, what's deliberately deferred and why, and the suggested next increment. See [`VERDICT.md`](VERDICT.md) for an evidence-based assessment of whether this is actually a good product to solve developer problems, and why.
 
 ## Quick install
 

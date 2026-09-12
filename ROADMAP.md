@@ -19,6 +19,10 @@ sample-repo`, and `python -m compileall -q engineeringos` before committing.
 Commit in small, logical steps — this repo's git history starts 2026-09-12
 and should stay legible.
 
+**Live deployment**: `https://engineeringos-mcp.onrender.com` (Render free
+tier, `engineeringos-mcp` project, trusted-team scope — see the dedicated
+section below before touching its configuration).
+
 ---
 
 ## State as of 2026-09-12
@@ -124,6 +128,64 @@ manager (winget/apt/brew) — never `pip install` alongside this package.
 
 ---
 
+## Live deployment (Render, trusted-team scope)
+
+Deployed at the user's request to actually try the production HTTP mode,
+scoped explicitly to "just me / my team" (not public/untrusted users) —
+this scope is why some choices below are safe here but would NOT be safe
+for a customer-facing deployment.
+
+- **Host**: Render free tier (`engineeringos-mcp` project, workspace
+  `My Workspace`), auto-deploys from `master` on every push. Free tier
+  sleeps after 15 minutes idle; first request after that takes 30-60s.
+  No credit card on file — chosen specifically because GCP's billing
+  account was closed and Oracle Cloud signup wasn't pursued once Render's
+  no-card free tier was confirmed current for 2026.
+- **Identity provider**: Auth0 free tier, tenant
+  `dev-ebj62kxjy4a7t13e.us.auth0.com`, API identifier (audience)
+  `https://engineeringos-api`. Nothing here yet issues real tokens for a
+  client to call the deployed server with — this only satisfies the
+  server's own startup requirement for a real issuer/audience. Wiring an
+  actual MCP client (Claude Code, etc.) through this Auth0 tenant's OAuth
+  flow is unfinished; whoever does this next should register a proper
+  Application in this tenant for that client.
+- **Sandbox worker deliberately disabled**
+  (`ENGINEERINGOS_REQUIRE_SANDBOX_WORKER=0`) — an informed, scope-limited
+  choice for trusted-team-only use, not an oversight. Do not carry this
+  setting into any deployment that might run untrusted repos' tests.
+- **Storage is ephemeral**: `ENGINEERINGOS_TENANT_ROOT=/data/tenants` and
+  `ENGINEERINGOS_INDEX_ROOT=/data/indexes`, pre-created at Docker build
+  time (see Dockerfile) since Render's free tier has no persistent disk
+  and the non-root container user can't create top-level directories at
+  runtime. Both directories are empty on every redeploy/restart — nothing
+  currently populates `/data/tenants` with real tenant repo checkouts, so
+  `repo_path`-based tools (`search_code`, `run_tests`, `investigate`, etc.)
+  have nothing to operate on against this hosted instance today. The
+  source-free code-map tools (`export_code_map` locally →
+  `ingest_code_map`/`map_find_symbol`/`map_dependency_graph` against this
+  host) are the one workflow that's actually usable end-to-end right now,
+  and conveniently also the one this project's whole hosted-architecture
+  story was built around.
+- **Verified working**: `https://engineeringos-mcp.onrender.com/healthz`
+  returns `{"status":"ok",...}`; `/readyz` returns
+  `{"status":"ready","checks":{"index_storage":true,"map_storage":true,"sandbox_worker":true}}`
+  — confirmed live, not just "deploy succeeded" in the dashboard.
+- **Real bug found and fixed getting here**: Render's "Docker Command"
+  override field does plain whitespace argv-splitting with no shell —
+  `&&`, `sh -c "..."`, quoting, none of it works as a multi-step start
+  command. Don't re-attempt a shell one-liner there; if a pre-start step
+  is ever needed again, either bake it into the Dockerfile (what was done
+  here) or use Render's "Pre-Deploy Command" (paid-plan-only on this
+  account, unverified whether it supports real shell syntax).
+- **Next steps if continuing this deployment**: decide on persistent
+  storage (Render paid disk, or an external object store) before this is
+  useful for more than the code-map workflow; finish the Auth0
+  client/Application setup so an actual MCP client can authenticate
+  against it; re-enable the sandbox worker requirement before ever
+  pointing this at anyone else's code.
+
+---
+
 ## Investigated and deferred this pass (with reasoning — do not silently re-attempt without reading this)
 
 - **Real sandbox (E2B/Firecracker) for HIGH_RISK tools** — no HIGH_RISK or
@@ -142,19 +204,28 @@ manager (winget/apt/brew) — never `pip install` alongside this package.
 
 ## Suggested next increment (pick the top unchecked item; re-derive priority if project state has changed)
 
-1. [ ] Root-cause the Windows multilspy hang, or accept it and move on —
+1. [ ] Decide on persistent storage for the live Render deployment (see
+   "Live deployment" section above) — a paid Render disk, or an external
+   store — the code-map workflow works today but everything ephemeral
+   resets on every restart. This is a cost/vendor decision, not something
+   to just implement.
+2. [ ] Finish Auth0 client setup for the live deployment so a real MCP
+   client can actually authenticate against it (see "Live deployment").
+   Currently the server verifies tokens correctly but nothing mints one
+   for a caller yet.
+3. [ ] Root-cause the Windows multilspy hang, or accept it and move on —
    don't just re-try blindly. If revisited: instrument exactly where it
    blocks on Windows (subprocess pipe handling is the most likely
    suspect for a library whose CI is presumably Linux-first) rather than
    guessing again.
-2. [ ] Verify and enable additional multilspy languages one at a time
+4. [ ] Verify and enable additional multilspy languages one at a time
    (Go and Rust are reasonable next candidates — both have a single,
    well-known, commonly-preinstalled language server binary — gopls and
    rust-analyzer respectively) — each needs its own "does it need a
    silent download, does it actually work" check like Python got, not a
    bulk enable.
-3. [ ] Consider `ragas`/`deepeval` for V3 once V1/V2 gaps are exhausted.
-4. [ ] Validate the wedge with real target customers (master doc §10) —
+5. [ ] Consider `ragas`/`deepeval` for V3 once V1/V2 gaps are exhausted.
+6. [ ] Validate the wedge with real target customers (master doc §10) —
    this was never about more building; it's still the actual open question
    behind all of the above.
 

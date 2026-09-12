@@ -303,6 +303,28 @@ def test_vulnerability_scan_reports_absent_scanner(tmp_path, monkeypatch):
         vulnerability_tools.vulnerability_scan(str(tmp_path))
 
 
+def test_vulnerability_scan_treats_null_results_as_no_findings(tmp_path, monkeypatch):
+    # Found by actually running osv-scanner against a repo with zero
+    # dependency manifests: it emits {"results": null} (a JSON null, not a
+    # missing key or an empty list). dict.get's default only kicks in for a
+    # missing key, so this previously misread a normal "nothing to scan"
+    # response as an invalid result shape.
+    import json
+    import engineeringos.tools.vulnerability_tools as vulnerability_tools
+    monkeypatch.setenv("ENGINEERINGOS_OSV_SCANNER_BIN", "osv-scanner-bin")
+    monkeypatch.delenv("ENGINEERINGOS_OSV_SCANNER_OFFLINE", raising=False)
+
+    class Result:
+        returncode = 0
+        stdout = json.dumps({"results": None, "experimental_config": {"licenses": {"summary": False, "allowlist": None}}})
+        stderr = ""
+
+    monkeypatch.setattr(vulnerability_tools.subprocess, "run", lambda *a, **k: Result())
+    evidence = vulnerability_tools.vulnerability_scan(str(tmp_path))
+    assert len(evidence) == 1
+    assert "no known-vulnerable dependencies" in evidence[0].summary
+
+
 def test_vulnerability_scan_summarizes_findings_and_labels_network_source(tmp_path, monkeypatch):
     import json
     import engineeringos.tools.vulnerability_tools as vulnerability_tools
